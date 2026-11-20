@@ -107,13 +107,47 @@ $('#addForm').onsubmit = e => {
 
 // ---------- POS ----------
 function calc(){
-  const it = items.find(i=>i.sku===$('#pItem').value); if(!it) return null;
-  const metal = it.wt*rates[it.metal], mk = metal*(+$('#pMk').value||0)/100, stone = it.stone;
-  const sub = metal+mk+stone, disc = sub*(+$('#pDisc').value||0)/100;
-  const taxable = sub-disc, gst = taxable*GST, total = taxable+gst;
-  const oldFine = (+$('#oWt').value||0)*(1-MELT)*(+$('#oPur').value)/0.916; // 22K treated as base
-  const oldVal = oldFine*rates.Gold, pay = Math.max(total-oldVal,0);
-  return { it, metal, mk, stone, disc, gst, total, oldVal, pay, oldWt:+$('#oWt').value||0 };
+  const it = items.find(i=>i.sku===$('#pItem').value);
+  if(!it) return null;
+
+  const metal = it.wt * rates[it.metal];
+
+  // Making charges
+  const mk = metal * (+$('#pMk').value || 0) / 100;
+
+  // Wastage charges
+  const wastage = metal * (+$('#pWastage').value || 0) / 100;
+
+  const stone = it.stone;
+
+  const sub = metal + mk + wastage + stone;
+
+  const disc = sub * (+$('#pDisc').value || 0) / 100;
+  const taxable = sub - disc;
+
+  const gst = taxable * GST;
+  const total = taxable + gst;
+
+  const oldFine = (+$('#oWt').value || 0) *
+                  (1-MELT) *
+                  (+$('#oPur').value) / 0.916;
+
+  const oldVal = oldFine * rates.Gold;
+  const pay = Math.max(total-oldVal,0);
+
+  return {
+    it,
+    metal,
+    mk,
+    wastage,
+    stone,
+    disc,
+    gst,
+    total,
+    oldVal,
+    pay,
+    oldWt: +$('#oWt').value || 0
+  };
 }
 function renderPOS(){
   const keep = $('#pItem').value;
@@ -128,13 +162,14 @@ function updateBill(){
   const r = (l,v,cls='')=>`<tr class="${cls}"><td>${l}</td><td class="r">${v}</td></tr>`;
   $('#billTbl').innerHTML =
     r(`Metal (${c.it.wt} g × ${inr(rates[c.it.metal])})`,inr(c.metal)) + r('Making charges',inr(c.mk)) +
+    r('Wastage charges',inr(c.wastage)) +
     r('Stone cost',inr(c.stone)) + (c.disc?r('Discount','− '+inr(c.disc)):'') + r('GST 3%',inr(c.gst)) +
     r('Bill total',inr(c.total),'tot') + (c.oldVal?r('Old-gold exchange','− '+inr(c.oldVal)):'') +
     r('Customer pays',inr(c.pay),'tot');
   const lim = DISC_LIMIT[role()], d = +$('#pDisc').value||0;
   $('#discMsg').textContent = d>lim ? `Discounts above ${lim}% need manager approval.` : '';
 }
-['pItem','pMk','pDisc','oWt','oPur'].forEach(id=>$('#'+id).oninput=updateBill);
+['pItem','pMk','pDisc','oWt','oPur' ,'pWastage'].forEach(id=>$('#'+id).oninput=updateBill);
 if($('#role')) $('#role').onchange = updateBill;
 $('#genBtn').onclick = () => {
   const c = calc(); if(!c) return;
@@ -147,7 +182,7 @@ $('#genBtn').onclick = () => {
 function showInvoice(s){
   const c=s.c, row=(l,v,t='')=>`<div class="row ${t}"><span>${l}</span><span>${v}</span></div>`;
   $('#invBox').innerHTML = `<h2>Invoice #${s.no}</h2><small>${s.date} · ${s.cust}</small><hr>` +
-    row(c.it.name+' ('+c.it.sku+')','') + row('Metal value',inr(c.metal)) + row('Making',inr(c.mk)) + row('Stone',inr(c.stone)) +
+    row(c.it.name+' ('+c.it.sku+')','') + row('Metal value',inr(c.metal)) + row('Making',inr(c.mk)) + row('Wastage',inr(c.wastage))  + row('Stone',inr(c.stone)) +
     (c.disc?row('Discount','− '+inr(c.disc)):'') + row('GST 3%',inr(c.gst)) + row('Total',inr(c.total),'t') +
     (c.oldVal?row(`Old gold (${c.oldWt} g)`,'− '+inr(c.oldVal)):'') + row('Paid by '+s.pay,inr(s.total),'t') +
     `<div class="acts"><button class="btn" onclick="window.print()">Print</button><button class="btn" onclick="$('#modal').classList.add('hide')">Close</button></div>`;
